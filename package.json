@@ -1,0 +1,31 @@
+{
+  "name": "chrome-devtools-mcp-cerema",
+  "version": "0.1.0",
+  "description": "Service MCP Chrome visible et pilotable pour l'Atelier CEREMA",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/cerema/index.js",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "lint": "eslint src/",
+    "start": "node dist/cerema/index.js",
+    "start:dev": "tsx src/cerema/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "express": "^4.18.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.10",
+    "eslint": "^8.56.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.1.0"
+  }
+}
