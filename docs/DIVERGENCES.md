@@ -18,3 +18,12 @@ _Vide — tous les changements sont dans `src/cerema/`._
 - **Ajout** de `src/cerema/session.ts` : `SessionManager` avec plafond, expiration, profil isolé par session
 - **Ajout** de `src/cerema/PvcTokenStore` : persistance sur PVC avec flush atomique
 - Divergence structurante : l'upstream est singleton-browser ; Cerema est multi-session
+
+## L4 — Image Docker + bureau virtuel noVNC
+
+- **Ajout** de `docker/Dockerfile` : image multi-étapes (node:22 build → ubuntu:24.04 runtime)
+- **Ajout** de `docker/entrypoint.sh` : initialise Xvfb (:99, 1280x720x24), x11vnc (port 5900, auth), websockiny (6080 → 5900)
+- **Ajout** de `src/cerema/view.ts` : générateur HTML pour noVNC, connecte WebSocket → websockiny
+- **Modification** de `src/cerema/server.ts` : route `/view` authentifiée qui sert le HTML noVNC (plus un placeholder 501)
+- **Ajout** de `@novnc/novnc` et `websockify` dans le runtime Docker
+- Port 3000 : Express (MCP + /view) ; Port 6080 : websockiny (WebSocket → VNC)

@@ -29,6 +29,7 @@ import { authMiddleware, UnauthorizedError } from './auth.js';
 import { MemoryTokenStore, PvcTokenStore } from './auth.js';
 import { SessionManager, MaxSessionsError } from './session.js';
 import { getForcedFlags } from './config.js';
+import { viewHtml } from './view.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -158,13 +159,10 @@ export class CeremaServer {
       });
     });
 
-    // View / remote desktop — placeholder pour L4 (noVNC)
-    app.get('/view', (_req: Request, res: ServerResponse) => {
-      sendJson(res, 501, {
-        error: 'Remote desktop non implémenté',
-        message: 'Cette fonctionnalité sera disponible au lot L4 (noVNC + Xvfb)',
-      });
-    });
+    // View / remote desktop — noVNC (L4)
+    // Authentifié via middleware authMiddleware — on le duplique inline
+    // car /view ne nécessite pas de token MCP, juste une clé valide
+    app.get('/view', authMiddleware(this.tokenStore), this.handleView.bind(this));
 
     // MCP endpoint — authentifié
     app.post('/mcp', authMiddleware(this.tokenStore), this.handleMcp.bind(this));
@@ -332,6 +330,15 @@ export class CeremaServer {
         });
       }
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // Handler /view — noVNC
+  // -----------------------------------------------------------------------
+
+  private handleView(_req: Request, res: ServerResponse): void {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.end(viewHtml());
   }
 
   // -----------------------------------------------------------------------
