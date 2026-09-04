@@ -27,3 +27,22 @@ _Vide — tous les changements sont dans `src/cerema/`._
 - **Modification** de `src/cerema/server.ts` : route `/view` authentifiée qui sert le HTML noVNC (plus un placeholder 501)
 - **Ajout** de `@novnc/novnc` et `websockify` dans le runtime Docker
 - Port 3000 : Express (MCP + /view) ; Port 6080 : websockiny (WebSocket → VNC)
+
+## L5 — Outils personnalisés `raise_window()` + `request_human()`
+
+- **Ajout** de `src/cerema/tools.ts` : module L5 avec deux outils MCP
+  - **`raise_window()`** : utilise xdotool (installé dans le Dockerfile) pour
+    activer la fenêtre Chrome de la session courante au premier plan dans le
+    bureau virtuel Xvfb
+  - **`request_human(raison, timeout_s)`** : crée un fichier d'état
+    `/data/human_requests/<sessionId>.json`, soulève la fenêtre, puis poll le
+    fichier toutes les 500 ms — retourne `resumed` si l'humain supprime le
+    fichier (intervention), `timeout` si aucun geste sous 300 s (configurable
+    par `timeout_s`, max 3600 s)
+  - Les outils sont enregistrés via `mcpServer.tool()` sur le McpServer de
+    chaque session, avec closures sur `sessionManager` et `managedSessionId`
+- **Modification** de `src/cerema/server.ts` : import + appel à
+  `registerL5Tools(mcpServer, sessionManager, managedSessionId)` dans
+  `handleNewSession()` juste après `mcpServer.connect(transport)`
+- Ajout de `src/cerema/tools.test.ts` : tests unitaires du cycle de vie du
+  fichier d'état et des exports

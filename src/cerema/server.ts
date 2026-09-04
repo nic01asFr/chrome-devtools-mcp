@@ -30,6 +30,7 @@ import { MemoryTokenStore, PvcTokenStore } from './auth.js';
 import { SessionManager, MaxSessionsError } from './session.js';
 import { getForcedFlags } from './config.js';
 import { viewHtml } from './view.js';
+import { registerL5Tools } from './tools.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -282,6 +283,9 @@ export class CeremaServer {
 
       // Lier le transport au serveur MCP
       await mcpServer.connect(transport);
+
+      // L5 : enregistrer les outils personnalisés
+      registerL5Tools(mcpServer, this.sessionManager, managedSessionId);
 
       // Enregistrer le transport
       transportKey = sessionId;
