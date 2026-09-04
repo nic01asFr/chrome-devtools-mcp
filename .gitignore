@@ -1,45 +1,24 @@
-# Dependencies
-node_modules/
+# Écrit par l'Atelier.
 
-# Build output
-dist/
-build/
-out/
+# Ce qu'il dépose lui-même : état de session, réglages de la machine.
+.claude/settings.local.json
+.claude/projects/
+.atelier/
+.wikichat/
 
-# Environment
+# Ce qui ne doit jamais partir. Un projet du pod porte souvent un .env
+# d'amorçage — on en a trouvé un qui disait « ne pas committer » sur sa
+# première ligne, et qui l'a été.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.pem
+*.key
+*_token
+*_secret
+.secrets/
+credentials*
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# TypeScript
-*.tsbuildinfo
-
-# Docker build cache
-.docker/
-
-# Profiles (persistent, tracked elsewhere)
-profiles/
-
-# Temp
-tmp/
-temp/
-
-# Chart dependencies
-charts/chrome-devtools-mcp/.vagrant
+node_modules/
+__pycache__/
+*.pyc

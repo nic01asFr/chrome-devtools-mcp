@@ -23,11 +23,8 @@ import type { Browser, ChromeReleaseChannel } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
 
 import {
-  FORCED_FLAGS,
-  DEFAULT_PROFILE_DIR,
   getDefaultViewport,
   parseChannel,
-  parseUrlPatterns,
   resolveProfileDir,
   type Channel,
 } from './config.js';
@@ -102,8 +99,7 @@ export async function launch(
     profileDir,
     headless = process.env['CDM_HEADLESS'] !== 'false',
     viewport,
-    allowedUrlPatterns,
-    blockedUrlPatterns,
+    // allowedUrlPatterns et blockedUrlPatterns seront traités par le tool handler
     chromeArgs = [],
     executablePath,
     acceptInsecureCerts,
@@ -155,10 +151,6 @@ export async function launch(
     args,
     acceptInsecureCerts,
     handleDevToolsAsPage: true,
-    logger: {
-      error: (msg) => console.error('[puppeteer]', msg),
-      debug: () => {}, // silencieux par défaut
-    },
   };
 
   const browser = await puppeteer.launch(launchConfig);
