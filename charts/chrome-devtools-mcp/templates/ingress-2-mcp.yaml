@@ -1,0 +1,43 @@
+{{- /* ============================================================================
+  chrome-devtools-mcp — Ingress 2 : /mcp (transport Streamable MCP)
+
+  Le transport MCP est un long-lived connection HTTP (POST → streaming).
+  Les annotations nginx permettent les timeouts longs et le Upgrade header
+  pour le WebSocket si le client l'utilise.
+  ============================================================================ */}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "chrome-devtools-mcp.name" . }}-mcp-ingress
+  labels:
+    {{- include "chrome-devtools-mcp.labels" . | nindent 4 }}
+  {{- /* Merge les deux maps d'annotations */}}
+  {{- $ann := dict }}
+  {{- with .Values.ingress.annotations }}
+  {{- range $k, $v := . }}
+  {{- $_ := set $ann $k $v }}
+  {{- end }}
+  {{- end }}
+  {{- if .Values.ingress.annotations_mcp }}
+  {{- range $k, $v := .Values.ingress.annotations_mcp }}
+  {{- $_ := set $ann $k $v }}
+  {{- end }}
+  {{- end }}
+  {{- if $ann }}
+  annotations:
+    {{- toYaml $ann | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.ingressClass }}
+  ingressClassName: {{ .Values.ingress.ingressClass }}
+  {{- end }}
+  rules:
+    - http:
+        paths:
+          - path: /mcp
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "chrome-devtools-mcp.name" . }}
+                port:
+                  name: http

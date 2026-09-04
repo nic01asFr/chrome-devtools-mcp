@@ -1,0 +1,47 @@
+{{/* ============================================================================
+  chrome-devtools-mcp — NOTES.txt
+
+  Affichée à la fin de `helm install` / `helm upgrade`.
+  Clé en haut, entre accents graves.
+  ============================================================================ */}}
+===============================================================================
+  chrome-devtools-mcp
+===============================================================================
+
+  Service en cours de déploiement.
+
+  Routes disponibles :
+
+    - Healthcheck (public) :
+      curl -s http://{{ include "chrome-devtools-mcp.name" . }}.{{ .Release.Namespace }}.svc.cluster.local:3100/health
+
+    - MCP Streamable API (authentifié) :
+      curl -H "Authorization: Bearer <cle-maitre>" http://{{ include "chrome-devtools-mcp.name" . }}.{{ .Release.Namespace }}.svc.cluster.local:3100/mcp
+
+    - Bureau noVNC (authentifié) :
+      http://{{ include "chrome-devtools-mcp.name" . }}.{{ .Release.Namespace }}.svc.cluster.local:3100/view
+
+  Clé maître : renseigner via le Secret Kubernetes
+  (auth.apiKeySecretName / auth.apiKeySecretKey dans values.yaml).
+  Sur SSPCloud, Onyxia injecte cette valeur automatiquement.
+
+===============================================================================
+  Sur SSPCloud — réinitialiser le déploiement
+
+  Un `helm upgrade` qui ne modifie que les valeurs (pas le manifeste
+  du Deployment) ne relance pas automatiquement les pods. Si vous changez
+  une image ou une variable d'environnement après un upgrade, relancez :
+
+    kubectl rollout restart deployment {{ include "chrome-devtools-mcp.name" . }}
+
+===============================================================================
+  Sur SSPCloud — catalogue vivant
+
+  Le healthcheck est accessible sans authentification. Le service
+  de catalogue s'en sert pour vérifier que le pod est vivant.
+
+    GET /health
+    → { "status": "ok", "sessions": 0, "maxSessions": 3, ... }
+
+  Si /health retourne 500, le pod est considéré en échec.
+===============================================================================

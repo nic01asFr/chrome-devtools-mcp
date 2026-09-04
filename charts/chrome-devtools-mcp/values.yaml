@@ -1,0 +1,129 @@
+# ============================================================================
+# chrome-devtools-mcp — valeurs par défaut
+# ============================================================================
+
+# --- Image Docker -----------------------------------------------------------
+image:
+  repository: ghcr.io/cerema/chrome-devtools-mcp
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# --- Déploiement ------------------------------------------------------------
+replicaCount: 1
+
+deployment:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # Reboot le déploiement si on change la config sans modifier le
+  # Deployment (Helm ne le fait pas automatiquement).
+  # apt-get install -y curl && \
+  #   kubectl rollout restart deployment chrome-devtools-mcp
+  # annotations:
+  #   rollme: <chaque upgrade, incrémenter cette valeur>
+
+# --- Environnement du conteneur --------------------------------------------
+env:
+  # Sessions — plafond simultané (défaut 3, override via HPA ou valeurs)
+  MAX_SESSIONS: "3"
+
+  # Expiration inactivité en secondes (défaut 1800 = 30 min)
+  SESSION_TIMEOUT: "1800"
+
+  # Catégories d'outils à exclure (CSV)
+  DISABLED_CATEGORIES: "extensions,pwa,experimental-third-party"
+
+  # Port serveur HTTP (défaut 3100)
+  PORT: "3100"
+
+  # Port websockify (défaut 6080) — doit correspondre au port dans entrypoint.sh
+  WEBSOCKIFY_PORT: "6080"
+
+  # Dossier de profil sur PVC
+  PROFILE_DIR: "/data/profiles"
+
+  # Canal Chrome : chrome ou chromium
+  CHANNEL: "chrome"
+
+  # Modes réseau — allowlist / blocklist (CSV)
+  # Exemple : CDM_ALLOWED_URL_PATTERNS=https://mondomaine.fr,https://autre.fr
+  ALLOWED_URL_PATTERNS: ""
+  BLOCKED_URL_PATTERNS: ""
+
+# --- Authentification -------------------------------------------------------
+auth:
+  # Option 1 : fournir la clé API dans la valeur (Onyxia onetimePassword)
+  apiKeyValue: ""
+
+  # Option 2 : lire depuis un Secret Kubernetes existant
+  apiKeySecretName: ""
+  apiKeySecretKey: ""
+
+  # Mot de passe VNC (défaut "novnc" — visible depuis /view)
+  vncPassword: "novnc"
+
+# --- Service Kubernetes ----------------------------------------------------
+service:
+  type: ClusterIP
+  annotations: {}
+
+# --- PVC — profils + token store -------------------------------------------
+pvc:
+  enabled: true
+  # Size by default is quite generous so that users don't run out of space
+  # for browser profiles.
+  size: 5Gi
+  storageClass: "fast-nvme"
+  accessMode: ReadWriteOnce
+  # La policy keep fait que le PVC survit au helm uninstall —
+  # les profils ancrés et les tokens clients ne sont pas perdus.
+  resourcePolicy: keep
+
+# --- Ingress — /view (premier pour le bouton "Ouvrir") ----------------------
+ingress:
+  # Annotations nginx : les timeouts doivent dépasser 60s car
+  # le WebSocket noVNC et les sessions MCP peuvent durer longtemps.
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+  annotations_view:
+    # /view doit être servi en premier (bouton "Ouvrir" prend le 1er ingress)
+    nginx.ingress.kubernetes.io/rewrite-target: /
+
+  annotations_mcp:
+    # Le transport Streamable MCP est du HTTP/1.1 avec streaming (pas WS).
+    # On conserve les headers de connexion longs.
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+  # Classe d'ingress SSPCloud
+  ingressClass: "nginx"
+
+# --- HPA — on-demand (réduire à zéro sans session active) ------------------
+autoscaling:
+  enabled: false
+  minReplicas: 0
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 5
+  targetMemoryUtilizationPercentage: 10
+
+# --- Service Account -------------------------------------------------------
+serviceAccount:
+  create: false
+  name: ""
+
+# --- Secrets Onyxia --------------------------------------------------------
+# Sur SSPCloud, ces métadonnées permettent au service d'apparaître
+# dans « Mes services » via le hook Onyxia.
+# La plupart des valeurs sont injectées par Onyxia lui-même.
+# owner / friendlyName / share peuvent être surchargés ici.
+onyxia:
+  release: ""          # version du release Onyxia (ex: v1)
+  owner: ""            # propriétaire du service
+  friendlyName: ""     # nom affiché dans l'onglet Connecteurs
+  catalog: ""          # chemin de catalogue (ex: /catalogs/default/my-service.yaml)
+  share: true          # partage par défaut du service

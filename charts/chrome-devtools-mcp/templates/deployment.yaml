@@ -1,0 +1,273 @@
+{{- /* ============================================================================
+  chrome-devtools-mcp — Deployment + Service + PVC
+  ============================================================================ */ -}}
+
+{{/* ---- PVC ================================================================== */}}
+{{- if .Values.pvc.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "chrome-devtools-mcp.name" . }}-data
+  labels:
+    {{- include "chrome-devtools-mcp.labels" . | nindent 4 }}
+  {{- /* helm.sh/resource-policy: keep fait survivre le PVC au helm uninstall */ -}}
+  {{- $pvcAnn := dict }}
+  {{- with .Values.pvc.annotations }}
+  {{- range $k, $v := . }}
+  {{- $_ := set $pvcAnn $k $v }}
+  {{- end }}
+  {{- end }}
+  {{- $_ := set $pvcAnn "helm.sh/resource-policy" .Values.pvc.resourcePolicy }}
+  {{- with $pvcAnn }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.pvc.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.pvc.size }}
+  {{- with .Values.pvc.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end }}
+
+{{/* ---- Secret Onyxia — métadonnées + clé maître ============================
+  Le nom du secret est le nom du déploiement. Il contient :
+  - Les annotations sh.onyxia.release.v1 avec owner, friendlyName,
+    catalog, share (JSON, pas de clés séparées avec points).
+  - La clé API en data.api-key si fournie.
+
+  La clé API est exposée en `value` (pas en Secret-only) pour que
+  l'utilisateur puisse la lire et la réutiliser.
+  ============================================================================ */}}
+{{- $root := . }}
+{{- if or .Values.onyxia.owner .Values.onyxia.friendlyName .Values.onyxia.catalog .Values.onyxia.release .Values.auth.apiKeyValue }}
+{{- $share := false }}
+{{- if kindIs "bool" .Values.onyxia.share }}
+{{- $share = .Values.onyxia.share }}
+{{- else }}
+{{- $share = eq .Values.onyxia.share "true" }}
+{{- end }}
+{{- $onyxia := dict
+  "owner" ($root.Values.onyxia.owner | default "")
+  "friendlyName" ($root.Values.onyxia.friendlyName | default (include "chrome-devtools-mcp.name" $root))
+  "catalog" ($root.Values.onyxia.catalog | default "")
+  "share" $share
+}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "chrome-devtools-mcp.name" $root }}
+  labels:
+    {{- include "chrome-devtools-mcp.labels" $root | nindent 4 }}
+  annotations:
+    sh.onyxia.release.v1: {{ $onyxia | toJson | quote }}
+type: Opaque
+{{/* Clé maître — en value directe, pas en Secret-only */}}
+{{- if $root.Values.auth.apiKeyValue }}
+data:
+  {{/* Base64 de la clé maître */}}
+  api-key: {{ $root.Values.auth.apiKeyValue | b64enc | quote }}
+{{- end }}
+{{- end }}
+
+{{/* ---- Deployment =========================================================== */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chrome-devtools-mcp.name" . }}
+  labels:
+    {{- include "chrome-devtools-mcp.labels" . | nindent 4 }}
+  {{- with .Values.deployment.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "chrome-devtools-mcp.selectorLabels" . | nindent 6 }}
+  {{- with .Values.deployment.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "chrome-devtools-mcp.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- with .Values.deployment.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "chrome-devtools-mcp.name" . }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: false
+        {{/* Chrome a besoin de certains caps pour fonctionner en conteneur. */}}
+        capabilities:
+          drop:
+            - ALL
+      containers:
+        - name: {{ include "chrome-devtools-mcp.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["tini", "--", "/usr/local/bin/entrypoint.sh"]
+          args: ["node", "dist/cerema/index.js"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.env.PORT | default 3100 }}
+              protocol: TCP
+            - name: vnc-ws
+              containerPort: {{ .Values.env.WEBSOCKIFY_PORT | default 6080 }}
+              protocol: TCP
+          env:
+            {{/* Variables de config de l'application */}}
+            - name: CDM_PORT
+              value: "{{ .Values.env.PORT | default 3100 }}"
+            - name: CDM_WEBSOCKIFY_PORT
+              value: "{{ .Values.env.WEBSOCKIFY_PORT | default 6080 }}"
+            - name: CDM_MAX_SESSIONS
+              value: "{{ .Values.env.MAX_SESSIONS | default 3 }}"
+            - name: CDM_SESSION_TIMEOUT
+              value: "{{ .Values.env.SESSION_TIMEOUT | default 1800 }}"
+            - name: CDM_CHANNEL
+              value: "{{ .Values.env.CHANNEL | default "chrome" }}"
+            - name: CDM_PROFILE_DIR
+              value: "/data"
+            - name: CDM_DISABLED_CATEGORIES
+              value: "{{ .Values.env.DISABLED_CATEGORIES | default "extensions,pwa,experimental-third-party" }}"
+            - name: CDM_HEADLESS
+              value: "false"
+            - name: DISPLAY
+              value: ":99"
+            {{/* Allowlist / Blocklist URL — optionnelles */}}
+            {{- if .Values.env.ALLOWED_URL_PATTERNS }}
+            - name: CDM_ALLOWED_URL_PATTERNS
+              value: {{ .Values.env.ALLOWED_URL_PATTERNS | quote }}
+            {{- end }}
+            {{- if .Values.env.BLOCKED_URL_PATTERNS }}
+            - name: CDM_BLOCKED_URL_PATTERNS
+              value: {{ .Values.env.BLOCKED_URL_PATTERNS | quote }}
+            {{- end }}
+            {{/* Clé maître — soit via un Secret existant, soit injectée par Onyxia */}}
+            {{- if .Values.auth.apiKeySecretName }}
+            - name: CDM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.apiKeySecretName }}
+                  key: {{ .Values.auth.apiKeySecretKey }}
+            {{- else if .Values.auth.apiKeyValue }}
+            - name: CDM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "chrome-devtools-mcp.name" . }}
+                  key: api-key
+            {{- end }}
+            {{/* Mot de passe VNC */}}
+            - name: CDM_VNC_PASSWORD
+              value: {{ .Values.auth.vncPassword | default "novnc" | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          {{/* Liveness : /health retourne 200 */}}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{/* Readiness : /health retourne 200 */}}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+
+      {{/* ---- Volumes ========================================================== */}}
+      volumes:
+        {{/* PVC pour profils + tokens */}}
+        {{- if .Values.pvc.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "chrome-devtools-mcp.name" . }}-data
+        {{- end }}
+        {{/* /tmp pour Chrome — tmpfs pour éviter de stocker des traces sur disk */}}
+        - name: tmp
+          emptyDir: {}
+
+---
+{{/* ---- Service ============================================================= */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chrome-devtools-mcp.name" . }}
+  labels:
+    {{- include "chrome-devtools-mcp.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: 3100
+      targetPort: http
+      protocol: TCP
+    - name: vnc-ws
+      port: 6080
+      targetPort: vnc-ws
+      protocol: TCP
+  selector:
+    {{- include "chrome-devtools-mcp.selectorLabels" . | nindent 4 }}
+
+{{/* ---- HPA — autoscaling on-demand ======================================== */}}
+{{- if .Values.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "chrome-devtools-mcp.name" . }}
+  labels:
+    {{- include "chrome-devtools-mcp.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "chrome-devtools-mcp.name" . }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
+{{- end }}

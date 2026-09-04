@@ -3,7 +3,9 @@
 > Chaque modification d'un fichier amont doit être listée ici avec sa raison.
 > Si cette liste est vide, aucun fichier amont n'a été modifié.
 
-_Vide — tous les changements sont dans `src/cerema/`._
+_Vide — tous les changements de code sont dans `src/cerema/`. Le chart Helm
+est dans `charts/chrome-devtools-mcp/` — pas de divergence amont, c'est du
+nouveau livrable._
 
 ## L2 — Transport HTTP streamable + auth + /health
 
@@ -27,6 +29,16 @@ _Vide — tous les changements sont dans `src/cerema/`._
 - **Modification** de `src/cerema/server.ts` : route `/view` authentifiée qui sert le HTML noVNC (plus un placeholder 501)
 - **Ajout** de `@novnc/novnc` et `websockify` dans le runtime Docker
 - Port 3000 : Express (MCP + /view) ; Port 6080 : websockiny (WebSocket → VNC)
+
+## L6 — Helm chart pour SSPCloud
+
+- **Ajout** de `charts/chrome-devtools-mcp/` : chart Helm complet (Chart.yaml, values.yaml, templates/)
+- **templates/deployment.yaml** — PVC (`helm.sh/resource-policy: keep`), Secret Onyxia (annotations `sh.onyxia.release.v1` JSON, clé API en value), Deployment (Tini, probes /health, volumes PVC + tmpfs), Service (ClusterIP 3100 + 6080), HPA (scale-to-zero)
+- **templates/ingress-1-view.yaml** — `/view` (noVNC) premier, timeouts proxy 3600s
+- **templates/ingress-2-mcp.yaml** — `/mcp` (Streamable HTTP), timeouts proxy 3600s, HTTP/1.1
+- **templates/NOTES.txt** — affiché à la fin de `helm install` : routes, clé, commandes de maintenance
+- **templates/_helpers.tpl** — helpers nom/labels/sélecteurs
+- **values.yaml** — toutes les variables configurables : image, env, auth, pvc, ingress, autoscaling, onyxia
 
 ## L5 — Outils personnalisés `raise_window()` + `request_human()`
 

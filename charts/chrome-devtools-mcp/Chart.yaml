@@ -1,0 +1,16 @@
+apiVersion: v2
+name: chrome-devtools-mcp
+description: Service Chrome DevTools MCP avec bureau virtuel noVNC pour l'Atelier CEREMA
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - chrome
+  - mcp
+  - mcp-server
+  - puppeteer
+  - noVNC
+  - cerema
+  - atelier
+annotations:
+  catalog.catalogs.onyxia.datagouv.fr: "true"

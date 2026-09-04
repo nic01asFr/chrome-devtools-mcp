@@ -1,0 +1,43 @@
+{{- /* ============================================================================
+  chrome-devtools-mcp — Ingress 1 : /view (noVNC bureau distant)
+
+  C'est le PREMIER ingress : le bouton « Ouvrir » de l'Atelier
+  prend le premier ingress dans l'ordre alphabétique.
+  ============================================================================ */}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "chrome-devtools-mcp.name" . }}-ingress
+  labels:
+    {{- include "chrome-devtools-mcp.labels" . | nindent 4 }}
+  {{- /* Merge les annotations de view + les timeouts communs */}}
+  {{- $ann := dict }}
+  {{- with .Values.ingress.annotations_view }}
+  {{- range $k, $v := . }}
+  {{- $_ := set $ann $k $v }}
+  {{- end }}
+  {{- end }}
+  {{- with .Values.ingress.annotations }}
+  {{- range $k, $v := . }}
+  {{- $_ := set $ann $k $v }}
+  {{- end }}
+  {{- end }}
+  {{- if $ann }}
+  annotations:
+    {{- toYaml $ann | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.ingressClass }}
+  ingressClassName: {{ .Values.ingress.ingressClass }}
+  {{- end }}
+  rules:
+    - http:
+        paths:
+          - path: /view
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "chrome-devtools-mcp.name" . }}
+                port:
+                  name: http
+---
