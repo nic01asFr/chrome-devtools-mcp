@@ -184,15 +184,7 @@ do_stop() {
         fi
         rm -f "$pidfile"
     done
-    sleep 0.5
-
-    # Nettoyage de dernier recours : motifs ancrés (pas de match large)
-    # Chrome : seulement le process qui lance avec --user-data-dir=/home/onyxia/work/chrome/profil-ancre
-    pkill -9 -f "\-\-user-data-dir=/home/onyxia/work/chrome/profil-ancre" 2>/dev/null || true
-    # Xvfb : seulement celui sur :99
-    pkill -9 -f "Xvfb :99" 2>/dev/null || true
-    sleep 0.3
-
+    # On ne recourt jamais à pkill -f : on tue uniquement les PID connus et leurs enfants.
     echo "[bureau] Arrêté."
 }
 
