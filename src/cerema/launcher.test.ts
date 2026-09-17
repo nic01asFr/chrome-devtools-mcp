@@ -5,6 +5,7 @@
  * launcher.ts : nécessite Chrome + Puppeteer → testé en integration CI.
  */
 
+import { DEFAULT_PROFILE_DIR } from './config.js';
 import { describe, it, expect } from 'vitest';
 import {
   parseChannel,
@@ -92,16 +93,14 @@ describe('parseUrlPatterns', () => {
 
 describe('resolveProfileDir', () => {
   it('utilise DEFAULT_PROFILE_DIR quand profileDir est undefined', () => {
-    expect(resolveProfileDir(undefined, 'chrome')).toBe('/data/profiles');
+    const expected = DEFAULT_PROFILE_DIR;
+    expect(resolveProfileDir(undefined, 'chrome')).toBe(expected);
   });
 
   it('suffixe le channel non-chrome', () => {
-    expect(resolveProfileDir(undefined, 'beta')).toBe(
-      '/data/profiles/chrome-profile-beta',
-    );
-    expect(resolveProfileDir(undefined, 'dev')).toBe(
-      '/data/profiles/chrome-profile-dev',
-    );
+    const base = DEFAULT_PROFILE_DIR;
+    expect(resolveProfileDir(undefined, 'beta')).toBe(`${base}/chrome-profile-beta`);
+    expect(resolveProfileDir(undefined, 'dev')).toBe(`${base}/chrome-profile-dev`);
   });
 
   it('utilise profileDir personnalisé', () => {

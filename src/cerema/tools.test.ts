@@ -2,8 +2,8 @@
  * Tests unitaires — Outils personnalisés MCP (L5)
  *
  * Vérifient le cycle de vie de `request_human` (création/suppression
- * du fichier d'état, expiration du timeout) et les signatures des
- * outils enregistrés sur le McpServer.
+ * du fichier d'état, expiration du timeout) et la présence de paramètres
+ * sur les outils enregistrés.
  *
  * Dépendances : vitest, fs. Aucune connexion Chrome requise.
  */
@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { SessionManager } from './session.js';
 import { registerL5Tools } from './tools.js';
@@ -31,15 +31,13 @@ function setupTestDir(): string {
 
 /** Mock minimal de SessionManager — suffit pour les tests unitaires. */
 function mockSessionManager(sessionId: string): SessionManager {
-  // On ne peut pas facilement mock une classe avec private members
-  // en TypeScript sans @vitest/utils/spy. On retourne un proxy.
   return {
     getSession: (id: string) => {
       if (id === sessionId) {
         return {
           sessionId,
           clientId: 'test-client',
-          profileDir: '/data/profiles/test',
+          profileDir: `${process.env.CDM_DATA_DIR ?? '/tmp/cerema'}/profiles/test`,
           browser: {
             process: () => ({ pid: 12345 }),
           } as never,
@@ -49,45 +47,59 @@ function mockSessionManager(sessionId: string): SessionManager {
       }
       return undefined;
     },
-    // autres méthodes non utilisées dans ces tests
   } as unknown as SessionManager;
 }
 
 // ---------------------------------------------------------------------------
-// Test 1 — registerL5Tools attache bien les deux outils
+// Test 1 — registerL5Tools attache deux outils avec paramètres
 // ---------------------------------------------------------------------------
 
 describe('registerL5Tools', () => {
   it('enregistre deux outils sur le McpServer', () => {
-    const testDir = setupTestDir();
-    const sessionId = randomUUID();
-
-    // Mock McpServer qui enregistre les outils sans les exécuter
-    const registeredTools = new Map<string, { desc: string; args: never[] }>();
+    setupTestDir();
+    let toolCount = 0;
+    let capturedSchema: unknown;
     const mockMcpServer = {
-      tool: (name: string, desc: string, _params: unknown, cb: unknown) => {
-        registeredTools.set(name, { desc, args: [] });
+      tool(_name: string, _desc: string, _schema: unknown, _cb?: unknown) {
+        toolCount++;
       },
-    } as unknown as ReturnType<typeof import('./tools.js').registerL5Tools extends (...a: infer A) => A extends [infer First, ...any] ? First : never>;
+      registerTool(name: string, config: { inputSchema?: unknown }, _cb: unknown) {
+        toolCount++;
+        if (name === 'request_human') {
+          capturedSchema = config.inputSchema;
+        }
+      },
+    } as never;
 
-    // On ne peut pas appeler registerL5Tools avec un vrai McpServer ici,
-    // mais on peut vérifier que la fonction est exportée et qu'elle
-    // accepte les bons types.
-    // En pratique, le test d'intégration (si un serveur tourne) est
-    // nécessaire. Ce test vérifie juste que l'export est correct.
+    registerL5Tools(mockMcpServer, mockSessionManager('x'), 'x');
+    expect(toolCount).toBe(2);
 
-    // Vérifier l'export
-    expect(typeof registerL5Tools).toBe('function');
+    // request_human a un inputSchema (schéma Zod avec raison + timeout_s)
+    expect(capturedSchema).toBeDefined();
+    const shape = capturedSchema as Record<string, unknown>;
+    expect(shape).toHaveProperty('raison');
+    expect(shape).toHaveProperty('timeout_s');
+    // Zod schemas exposent safeParse (v3) ou safeParseAsync (v4)
+    expect(typeof (shape.raison as { safeParse?: Function })?.safeParse).toBe('function');
+    expect(typeof (shape.timeout_s as { safeParse?: Function })?.safeParse).toBe('function');
   });
 
-  it('ne lève pas si la session n\'existe pas (raise_window graceful)', () => {
-    const sessionId = randomUUID();
-    const mockMgr = mockSessionManager('non-existent');
+  it('raise_window est un outil sans paramètre', () => {
+    setupTestDir();
+    let raiseWindowRegistered = false;
+    const mockMcpServer = {
+      tool(name: string) {
+        if (name === 'raise_window') {
+          raiseWindowRegistered = true;
+        }
+      },
+      registerTool(_name: string, _config: unknown, _cb: unknown) {
+        // ignored
+      },
+    } as never;
 
-    // Si la session n'existe pas, findChromeWindowPid retourne undefined
-    // et raiseWindow fait le fallback — pas d'erreur.
-    // On ne peut pas tester ce cas facilement sans lancer un McpServer.
-    // Le test est laissé comme placeholder pour l'intégration.
+    registerL5Tools(mockMcpServer, mockSessionManager('x'), 'x');
+    expect(raiseWindowRegistered).toBe(true);
   });
 });
 
@@ -133,17 +145,15 @@ describe('human request state file lifecycle', () => {
     expect(fs.existsSync(filePath)).toBe(false);
   });
 
-  it('timeout : le fichier existe toujours après expiration', (done) => {
+  it('timeout : le fichier existe toujours après 150ms', async () => {
     const sid = randomUUID();
     const filePath = path.join(TEST_DIR, 'human_requests', `${sid}.json`);
     fs.writeFileSync(filePath, JSON.stringify({ sessionId: sid, raison: 'test' }), { mode: 0o644 });
 
-    // Simuler un timeout de 150ms
-    setTimeout(() => {
-      expect(fs.existsSync(filePath)).toBe(true);
-      fs.unlinkSync(filePath);
-      done();
-    }, 150);
+    // Attendre 150ms — le fichier devrait toujours exister
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(fs.existsSync(filePath)).toBe(true);
+    fs.unlinkSync(filePath);
   }, 2000);
 });
 

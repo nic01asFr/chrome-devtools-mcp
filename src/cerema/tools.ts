@@ -10,7 +10,7 @@
  * **request_human(raison, timeout_s)** — signale qu'une intervention humaine
  * est nécessaire (MFA, CAPTCHA, login). L'outil :
  *   1. met la fenêtre au premier plan (xdotool) ;
- *   2. crée un fichier d'état dans /data/human_requests/<sessionId>.json ;
+ *   2. crée un fichier d'état dans $CDM_DATA_DIR/human_requests/<sessionId>.json ;
  *   3. attend que l'humain supprime le fichier ou que le timeout expire ;
  *   4. retourne « resumed » ou « timeout ».
  *
@@ -23,15 +23,17 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { DATA_DIR } from './config.js';
 import type { SessionManager } from './session.js';
 
 // ---------------------------------------------------------------------------
 // Constantes
 // ---------------------------------------------------------------------------
 
-const HUMAN_REQUESTS_DIR = '/data/human_requests';
+const HUMAN_REQUESTS_DIR = `${DATA_DIR}/human_requests`;
 const DEFAULT_TIMEOUT_S = 300; // 5 minutes
 
 // ---------------------------------------------------------------------------
@@ -129,7 +131,7 @@ function raiseWindow(
  * Demande d'intervention humaine avec timeout.
  *
  * 1. Soulève la fenêtre
- * 2. Crée un fichier d'état /data/human_requests/<sessionId>.json
+ * 2. Crée un fichier d'état $CDM_DATA_DIR/human_requests/<sessionId>.json
  * 3. Polling sur le fichier : détecte intervention humaine (fichier supprimé)
  *    ou expiration du timeout
  * 4. Supprime le fichier d'état
@@ -165,7 +167,7 @@ async function requestHuman(
   // 3. Polling : attendre suppression du fichier (intervention humaine)
   //    ou expiration du timeout. Le timer est nettoyé dès que le fichier
   //    disparaît, pour ne pas bloquer au-delà.
-  let status: 'resumed' | 'timeout';
+  let status: 'resumed' | 'timeout' = 'timeout';
   const startTime = Date.now();
   const timerId = setTimeout(() => {
     // Timeout atteint : on s'assure que le fichier est supprimé
@@ -181,11 +183,6 @@ async function requestHuman(
     // Polling toutes les 500ms
     // eslint-disable-next-line no-await-in-loop
     await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-
-  // Si la boucle s'est achevée sans setStatus — timeout
-  if (status === undefined) {
-    status = 'timeout';
   }
 
   // 4. Supprimer le fichier d'état
@@ -250,30 +247,28 @@ export function registerL5Tools(
   // ------------------------------------------------------------------
   // request_human — demande d'intervention humaine
   // ------------------------------------------------------------------
-  mcpServer.tool(
+  mcpServer.registerTool(
     'request_human',
-    'Signale qu\'une intervention humaine est nécessaire sur cette session. '
-      + 'L\'outil met la fenêtre au premier plan, crée un signal visible via '
-      + '/data/human_requests/<sessionId>.json, et attend que l\'humain '
-      + 'intervienne ou que le timeout expire (par défaut 300 s). '
-      + 'Les cookies acquis pendant l\'intervention persistent dans le profil.',
     {
-      raison: {
-        type: 'string',
-        description: 'Raison de la demande : "MFA", "CAPTCHA", "login_required", etc.',
-      },
-      timeout_s: {
-        type: 'number',
-        description: 'Timeout en secondes (par défaut 300, max 3600).',
+      title: 'request_human',
+      description: 'Signale qu\'une intervention humaine est nécessaire sur cette session. '
+        + 'L\'outil met la fenêtre au premier plan, crée un signal visible via '
+        + '$CDM_DATA_DIR/human_requests/<sessionId>.json, et attend que l\'humain '
+        + 'intervienne ou que le timeout expire (par défaut 300 s). '
+        + 'Les cookies acquis pendant l\'intervention persistent dans le profil.',
+      inputSchema: {
+        raison: z.string().describe('Raison de la demande (CAPTCHA, MFA, login…)'),
+        timeout_s: z.number().int().min(1).max(3600).describe('Timeout en secondes (max 3600)'),
       },
     },
-    async (args: { raison: string; timeout_s?: number }) => {
-      const timeout_s = args.timeout_s ?? DEFAULT_TIMEOUT_S;
+    async ({ raison, timeout_s }) => {
+      const resolvedTimeout = timeout_s ?? DEFAULT_TIMEOUT_S;
+      const resolvedRaison = raison ?? 'MFA';
       const result = await requestHuman(
         sessionManager,
         managedSessionId,
-        args.raison,
-        Math.min(timeout_s, 3600), // max 1 heure
+        resolvedRaison,
+        Math.min(resolvedTimeout, 3600), // max 1 heure
       );
 
       return {

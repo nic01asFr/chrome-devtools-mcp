@@ -1,7 +1,7 @@
 /**
  * Store de tokens persisté — Chrome DevTools MCP CEREMA
  *
- * Implémente TokenStore avec persistance sur PVC (/data/tokens.json).
+ * Implémente TokenStore avec persistance sur PVC ($CDM_DATA_DIR/tokens.json).
  * Les données sont aussi gardées en RAM pour la performance.
  *
  * Mécanisme d'écriture :
@@ -16,6 +16,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+
+import { DATA_DIR } from './config.js';
 
 import type { ClientToken } from './auth.js';
 
@@ -143,14 +145,14 @@ export class PvcTokenStore implements TokenStore {
   private static readonly FLUSH_INTERVAL_MS = 30_000;
 
   /**
-   * @param filePath - Chemin vers le fichier PVC (default: /data/tokens.json)
+   * @param filePath - Chemin vers le fichier PVC (default: $CDM_DATA_DIR/tokens.json)
    * @param flushInterval - Intervalle de flush automatique
    */
   constructor(
-    filePath: string = '/data/tokens.json',
+    filePath: string = '',
     flushInterval: number = PvcTokenStore.FLUSH_INTERVAL_MS,
   ) {
-    this.filePath = filePath;
+    this.filePath = filePath || `${DATA_DIR}/tokens.json`;
     // Charger depuis le PVC au démarrage
     this.loadSync();
 

@@ -22,7 +22,9 @@ export const FORCED_FLAGS = {
 };
 
 const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
-export const DEFAULT_PROFILE_DIR = '/data/profiles';
+/** Répertoire racine pour les fichiers de données (PVC). Configurable via CDM_DATA_DIR. */
+export const DATA_DIR = process.env['CDM_DATA_DIR'] ?? '/home/onyxia/work/cerema';
+export const DEFAULT_PROFILE_DIR = `${DATA_DIR}/profiles`;
 
 // ---------------------------------------------------------------------------
 // Parseurs

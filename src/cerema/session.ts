@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import type { Browser } from 'puppeteer-core';
 import { launch, closeBrowser } from './launcher.js';
 import type { LaunchOptions } from './launcher.js';
-import { parseChannel } from './config.js';
+import { parseChannel, DATA_DIR } from './config.js';
 import { TokenStore } from './auth.js';
 import type { ClientToken } from './auth.js';
 
@@ -44,7 +44,7 @@ export interface SessionManagerOptions {
   sessionTimeout?: number;
   /** Store de tokens clients (PVC-backed L3) */
   tokenStore: TokenStore;
-  /** Profil de base pour les sessions PVC (default: /data/profiles) */
+  /** Profil de base pour les sessions PVC (default: DATA_DIR/profiles) */
   profileDir?: string;
   /** Allowlist URL (CSV depuis CDM_ALLOWED_URL_PATTERNS) */
   allowedUrlPatterns?: string[];
@@ -58,7 +58,6 @@ export interface SessionManagerOptions {
 
 const DEFAULT_MAX_SESSIONS = 10;
 const DEFAULT_SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30min
-const DEFAULT_BASE_PROFILE_DIR = '/data/profiles';
 
 // ---------------------------------------------------------------------------
 // SessionManager
@@ -84,7 +83,7 @@ export class SessionManager {
       10,
     );
     this.tokenStore = options.tokenStore;
-    this.baseProfileDir = options.profileDir || DEFAULT_BASE_PROFILE_DIR;
+    this.baseProfileDir = options.profileDir || `${DATA_DIR}/profiles`;
     this.allowedUrlPatterns = options.allowedUrlPatterns;
     this.blockedUrlPatterns = options.blockedUrlPatterns;
 

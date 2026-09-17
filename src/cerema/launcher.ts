@@ -12,13 +12,14 @@
  *
  * Configurable par variables d'environnement :
  *   CDM_CHANNEL                canal Chrome (default: chrome)
- *   CDM_PROFILE_DIR            dossier profile (default: /data/profiles)
+ *   CDM_PROFILE_DIR            dossier profile (default: $CDM_DATA_DIR/profiles)
  *   CDM_ALLOWED_URL_PATTERNS   allowlist URL (CSV, vide = aucune)
  *   CDM_BLOCKED_URL_PATTERNS   blocklist URL (CSV, vide = aucune)
  *   CDM_HEADLESS               headless (default: true)
  *   CDM_VIEWPORT               taille viewport (default: 1280x720)
  */
 
+import { execSync } from 'node:child_process';
 import type { Browser, ChromeReleaseChannel } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
 
@@ -36,7 +37,7 @@ import {
 export interface LaunchOptions {
   /** Canal Chrome (canary, dev, beta, chrome). default: 'chrome' */
   channel?: Channel;
-  /** User-data-dir Chrome. default: /data/profiles/<channel> */
+  /** User-data-dir Chrome. default: $CDM_DATA_DIR/profiles/<channel> */
   profileDir?: string;
   /** Headless (default: true) */
   headless?: boolean;
@@ -194,7 +195,6 @@ export async function closeBrowser(browser: Browser): Promise<void> {
  * @returns true si Chrome est trouvé, false sinon.
  */
 export function detectChrome(): boolean {
-  const { execSync } = require('node:child_process');
   try {
     const output = execSync('which google-chrome || which chrome || which google-chrome-stable', {
       encoding: 'utf-8',

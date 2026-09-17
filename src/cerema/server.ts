@@ -10,12 +10,26 @@
  * Ce fichier est focalisé sur le routing HTTP et le transport Streamable.
  */
 
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Application, Request } from 'express';
+
+const require = createRequire(import.meta.url);
+const express = require('express') as typeof import('express');
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Browser } from 'puppeteer-core';
+
+import { closeBrowser } from './launcher.js';
+import { authMiddleware, UnauthorizedError } from './auth.js';
+import { MemoryTokenStore, PvcTokenStore } from './auth.js';
+import { SessionManager, MaxSessionsError } from './session.js';
+import { getForcedFlags, DATA_DIR } from './config.js';
+import { viewHtml } from './view.js';
+import { registerL5Tools } from './tools.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,18 +37,6 @@ import type { Browser } from 'puppeteer-core';
 
 /** Format UUID RFC 4122 */
 type Uuid = `${string}-${string}-${string}-${string}-${string}`;
-
-import { closeBrowser } from './launcher.js';
-import { authMiddleware, UnauthorizedError } from './auth.js';
-import { MemoryTokenStore, PvcTokenStore } from './auth.js';
-import { SessionManager, MaxSessionsError } from './session.js';
-import { getForcedFlags } from './config.js';
-import { viewHtml } from './view.js';
-import { registerL5Tools } from './tools.js';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 /** Token store shared entre auth middleware et SessionManager */
 type SharedTokenStore = PvcTokenStore | MemoryTokenStore;
@@ -84,8 +86,8 @@ function getParsedBody(req: IncomingMessage): unknown | undefined {
  */
 function createTokenStore(): SharedTokenStore {
   try {
-    if (require('fs').existsSync('/data')) {
-      return new PvcTokenStore('/data/tokens.json');
+    if (fs.existsSync(DATA_DIR)) {
+      return new PvcTokenStore(`${DATA_DIR}/tokens.json`);
     }
   } catch {
     // Ignore
@@ -133,20 +135,20 @@ export class CeremaServer {
    * Crée l'app Express avec routes et middlewares.
    */
   private createExpressApp(): Application {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const express = require('express') as typeof import('express');
-
     const app = express();
     app.disable('x-powered-by');
 
-    // Parser JSON body pour le routing
-    app.use(
-      express.json({
-        limit: '10mb',
-        type: 'application/json',
-        strict: false,
-      }),
-    );
+    // Parser JSON body — uniquement si Content-Type est explicitement application/json.
+    // Cela évite que express.json() ne lève sur les requêtes /mcp sans body JSON valide,
+    // et permet à authMiddleware de passer en premier pour renvoyer 401 au lieu de 500.
+    app.use((req, _res, next) => {
+      const ct = req.headers['content-type'];
+      if (ct && ct.includes('application/json')) {
+        express.json({ limit: '10mb', strict: false })(req, _res, next);
+      } else {
+        next();
+      }
+    });
 
     // Health check — accessible même sans auth
     app.get('/health', (_req: Request, res: ServerResponse) => {
@@ -353,6 +355,7 @@ export class CeremaServer {
     err: Error,
     _req: Request,
     res: ServerResponse,
+    _next: unknown,
   ): void {
     if (err instanceof UnauthorizedError) {
       sendJson(res, 401, { error: 'Unauthorized', message: err.message });

@@ -19,7 +19,7 @@ import { CeremaServer } from './server.js';
  *   CDM_PORT                  port d'écoute (default: 3000)
  *   CDM_HOST                  adresse d'écoute (default: 0.0.0.0)
  *   CDM_CHANNEL               canal Chrome (default: chrome)
- *   CDM_PROFILE_DIR           dossier profiles (default: /data/profiles)
+ *   CDM_PROFILE_DIR           dossier profiles (default: $CDM_DATA_DIR/profiles)
  *   CDM_ALLOWED_URL_PATTERNS  allowlist URL CSV
  *   CDM_BLOCKED_URL_PATTERNS  blocklist URL CSV
  *   CDM_HEADLESS              headless (default: true, mettre "false" pour désactiver)

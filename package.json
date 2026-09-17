@@ -4,11 +4,11 @@
   "description": "Service MCP Chrome visible et pilotable pour l'Atelier CEREMA",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "dist/cerema/index.js",
+  "main": "dist/src/cerema/index.js",
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "lint": "eslint src/",
-    "start": "node dist/cerema/index.js",
+    "start": "node dist/src/cerema/index.js",
     "start:dev": "tsx src/cerema/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -18,7 +18,8 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "express": "^4.18.0",
     "puppeteer-core": "^25.10.0",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
