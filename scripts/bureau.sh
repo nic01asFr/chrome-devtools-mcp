@@ -3,6 +3,7 @@
 # Idempotent : installe les paquets si absents, gère start|stop|status.
 # Tout écoute UNIQUEMENT sur 127.0.0.1.
 set -euo pipefail
+ulimit -c 0
 
 PROJ=/home/onyxia/work
 LOG=$PROJ/logs/bureau
@@ -172,19 +173,16 @@ do_start() {
 # ── stop — ne tue que nos processus et leurs descendants ────────────────
 do_stop() {
     echo "[bureau] Arrêt de tous les processus…"
-    for pidfile in "$PID"/Xvfb "$PID"/fluxbox "$PID"/x11vnc "$PID"/chrome "$PID"/websockify; do
+    # Arrêt dans l'ordre inverse du démarrage
+    for pidfile in "$PID"/websockify "$PID"/chrome "$PID"/x11vnc "$PID"/fluxbox "$PID"/Xvfb; do
         [ -f "$pidfile" ] || continue
         pid=$(cat "$pidfile")
         if kill -0 "$pid" 2>/dev/null; then
-            # Stop le processus principal puis ses enfants
             kill "$pid" 2>/dev/null || true
             sleep 0.5
-            # Tue les descendants (enfants, petits-enfants…)
-            pkill -P "$pid" 2>/dev/null || true
         fi
         rm -f "$pidfile"
     done
-    # On ne recourt jamais à pkill -f : on tue uniquement les PID connus et leurs enfants.
     echo "[bureau] Arrêté."
 }
 
