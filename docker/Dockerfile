@@ -72,7 +72,7 @@ COPY --from=build /build/package.json /app/package.json
 
 # Installer noVNC + websockify (Python)
 RUN npm install -g @novnc/novnc@1.3.0 \
- && pip install --no-cache-dir websockify
+ && pip install --no-cache-dir --break-system-packages websockify
 
 # Copier le script d'entrée
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
