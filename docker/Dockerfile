@@ -50,6 +50,11 @@ RUN npm run build
 # -------------------------------------------------------------------
 FROM chrome-base
 
+# Installer Node.js 22 (l'image finale ubuntu:24.04 n'en a pas)
+RUN wget -qO- https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Environnement
 ENV PATH="/usr/local/bin:$PATH" \
     DISPLAY=:99 \
