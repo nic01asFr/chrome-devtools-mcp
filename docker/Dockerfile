@@ -16,15 +16,18 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANGUAGE=fr_FR:fr
 
 # Dépendances X11 / Chrome + utilitaires (xdotool pour L5)
+# Séparer apt-get clean (après les paquets apt) et le téléchargement/instalation de Chrome
+# pour ne pas supprimer les listes apt entre les deux.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wget gnupg2 ca-certificates apt-transport-https \
         fonts-liberation fonts-noto-cjk \
         xvfb x11vnc xdotool x11-utils xclip \
         python3 python3-pip \
         tini \
-    && apt-get clean && rm -rf /var/lib/apt/lists/* \
-    && wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && apt-get install -y ./google-chrome-stable_current_amd64.deb \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt-get update && apt-get install -y --no-install-recommends ./google-chrome-stable_current_amd64.deb \
     && rm google-chrome-stable_current_amd64.deb \
     && rm -rf /var/lib/apt/lists/*
 
