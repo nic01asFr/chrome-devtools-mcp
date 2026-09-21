@@ -129,8 +129,12 @@ export class CeremaServer {
         // Authentifié via middleware authMiddleware — on le duplique inline
         // car /view ne nécessite pas de token MCP, juste une clé valide
         app.get('/view', authMiddleware(this.tokenStore), this.handleView.bind(this));
-        // MCP endpoint — authentifié
+        // MCP endpoint — authentifié.
+        // POST : handshake + appels JSON-RPC ; DELETE : fermeture de session ;
+        // GET : flux SSE optionnel (messages initiés par le serveur).
         app.post('/mcp', authMiddleware(this.tokenStore), this.handleMcp.bind(this));
+        app.delete('/mcp', authMiddleware(this.tokenStore), this.handleMcp.bind(this));
+        app.get('/mcp', authMiddleware(this.tokenStore), this.handleMcp.bind(this));
         // Gestionnaire d'erreurs Express
         app.use(this.handleError.bind(this));
         return app;
@@ -164,11 +168,13 @@ export class CeremaServer {
     // Handler /mcp — transport Streamable HTTP
     // -----------------------------------------------------------------------
     handleMcp(req, res) {
-        const sessionId = req.headers['x-mcp-session-id'];
+        // La spec MCP (2025-03-26) et le SDK utilisent le header `mcp-session-id`
+        // (pas `x-mcp-session-id`). Accepter les deux pour la compatibilité.
+        const sessionId = (req.headers['mcp-session-id'] ?? req.headers['x-mcp-session-id']);
         const method = req.method;
         // ---- Nouvelle session (POST sans session-id) ----
         if (method === 'POST' && !sessionId) {
-            this.handleNewSession(req, res);
+            void this.handleNewSession(req, res);
             return;
         }
         // ---- Session existante ----
@@ -219,10 +225,15 @@ export class CeremaServer {
                     sessionId = sid;
                 },
             });
+            // L5 : enregistrer les outils personnalisés AVANT de connecter le transport.
+            // Le SDK MCP fige les capabilities au premier handleRequest ; enregistrer
+            // des outils après provoque « Cannot register capabilities after connecting ».
+            // managedSessionId est capturé par closure pour que le handler accède à
+            // l'ID de session au moment de l'exécution (après connection).
+            const managedSessionIdForClosure = managedSessionId;
+            registerL5Tools(mcpServer, this.sessionManager, managedSessionIdForClosure);
             // Lier le transport au serveur MCP
             await mcpServer.connect(transport);
-            // L5 : enregistrer les outils personnalisés
-            registerL5Tools(mcpServer, this.sessionManager, managedSessionId);
             // Enregistrer le transport
             transportKey = sessionId;
             this.transports.set(transportKey, {
@@ -231,7 +242,9 @@ export class CeremaServer {
                 mcpServer,
                 transport,
             });
-            // Nettoyage auto à la fermeture du transport
+            // Nettoyage auto à la fermeture du transport :
+            // déconnecter aussi la session gérée (ferme Chrome + nettoie le profil).
+            // Sans ce lien, chaque session clôturée laisse un Chrome orphelin.
             const tid = transportKey;
             transport.onclose = () => {
                 console.log(`[cerema] Session ${managedSessionId} fermée par le client`);
@@ -240,6 +253,9 @@ export class CeremaServer {
                     this.transports.delete(tid);
                     this.cleanupBrowser(entry.browser);
                 }
+                this.sessionManager
+                    .destroySession(managedSessionId)
+                    .catch((err) => console.error('[cerema] Erreur destruction session:', err));
             };
             transport.onerror = (err) => {
                 console.error(`[cerema] Erreur session ${managedSessionId}:`, err);
