@@ -1,0 +1,22 @@
+{
+  "workbench.startupEditor": "none",
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  "chat.disableAIFeatures": true,
+  "workbench.welcomePage.walkthroughs.openOnInstall": false,
+  "extensions.ignoreRecommendations": true,
+  "remote.otherPortsAttributes": {
+    "onAutoForward": "silent"
+  },
+  "claudeCode.disableLoginPrompt": true,
+  "claudeCode.preferredLocation": "sidebar",
+  "claudeCode.hideOnboarding": true,
+  "claudeCode.environmentVariables": [
+    {
+      "name": "ANTHROPIC_BASE_URL",
+      "value": "https://llm.lab.sspcloud.fr/api"
+    }
+  ],
+  "security.workspace.trust.enabled": false,
+  "task.allowAutomaticTasks": "on",
+  "window.title": "Chrome devtools atelier"
+}

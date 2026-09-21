@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "atelier": {
+      "type": "http",
+      "url": "http://127.0.0.1:8787/mcp",
+      "headers": {
+        "Authorization": "Bearer ${ATELIER_MCP_KEY}"
+      }
+    },
+    "Onyxia": {
+      "type": "http",
+      "url": "https://user-nic01asfr-passerelle-mcp.user.lab.sspcloud.fr/mcp",
+      "headers": {
+        "Authorization": "Bearer 3565e1ae8a4f378b0a1b483f45f0a34a7cfac2d90e9a279d"
+      }
+    },
+    "filesystem": {
+      "command": "/home/onyxia/work/bin/node",
+      "args": [
+        "/home/onyxia/work/mcp/tools/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js",
+        "/home/onyxia/work"
+      ]
+    },
+    "wikichat": {
+      "type": "sse",
+      "url": "http://127.0.0.1:3777/sse?agent=atelier"
+    }
+  }
+}

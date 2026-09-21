@@ -1,0 +1,131 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kaniko-build
+  namespace: user-nic01asfr
+spec:
+  initContainers:
+  - name: init-files
+    image: alpine:3.19
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        echo "=== Step 1: Creating Dockerfile ==="
+        cat > /workspace/Dockerfile << 'DDOCKER'
+FROM node:22-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget gnupg ca-certificates \
+    libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0 \
+    libgbm1 libasound2 libpangocairo-1.0-0 \
+    libdrm2 libxcomposite1 libxdamage1 libxrandr2 \
+    fonts-liberation dbus-x11 \
+    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update && apt-get install -y google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json* ./
+RUN npm ci --ignore-scripts --omit=dev || npm install --ignore-scripts
+COPY . .
+EXPOSE 9222 3100
+ENTRYPOINT ["sh", "-c", "google-chrome --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-address=0.0.0.0 --remote-debugging-port=9222 --no-first-run --no-default-browser-check & sleep 3 && node ctx_test.js"]
+DDOCKER
+        echo "Dockerfile created: $(wc -c < /workspace/Dockerfile) bytes"
+        echo "=== Step 2: Creating package.json ==="
+        cat > /workspace/package.json << 'DJSON'
+{
+  "name": "chrome-devtools",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.21.3"
+  }
+}
+DJSON
+        echo "package.json created: $(wc -c < /workspace/package.json) bytes"
+        echo "=== Step 3: Creating ctx_test.js ==="
+        cat > /workspace/ctx_test.js << 'DCJS'
+const WebSocket = require('ws');
+const http = require('http');
+function get(p){return new Promise(r=>http.get('http://localhost:9222'+p,s=>{let d='';s.on('data',c=>d+=c);s.on('end',()=>r(JSON.parse(d)))}))}
+class CDP {
+  constructor(url){this.ws=new WebSocket(url);this.id=0;this.p={};
+    this.ready=new Promise(r=>this.ws.on('open',r));
+    this.ws.on('message',m=>{const o=JSON.parse(m);if(o.id&&this.p[o.id]){this.p[o.id](o);delete this.p[o.id]}})}
+  send(method,params={},sessionId){return new Promise(r=>{const id=++this.id;this.p[id]=r;
+    this.ws.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}))})}
+}
+(async()=>{
+  const v=await get('/json/version');
+  const c=new CDP(v.webSocketDebuggerUrl); await c.ready;
+  const out={};
+  for (const name of ['A','B']) {
+    const ctx=(await c.send('Target.createBrowserContext',{})).result.browserContextId;
+    const t=(await c.send('Target.createTarget',{url:'https://example.com',browserContextId:ctx})).result.targetId;
+    const s=(await c.send('Target.attachToTarget',{targetId:t,flatten:true})).result.sessionId;
+    await new Promise(r=>setTimeout(r,2500));
+    await c.send('Runtime.evaluate',{expression:`document.cookie="marqueur=${name};path=/"`},s);
+    out[name]={ctx,target:t,session:s};
+  }
+  for (const name of ['A','B']) {
+    const s=out[name].session;
+    const r=await c.send('Runtime.evaluate',{expression:'document.cookie',returnByValue:true},s);
+    console.log(`contexte ${name} (${out[name].ctx.slice(0,8)}) -> cookie vu : "${r.result.result.value}"`);
+  }
+  const tg=await get('/json/list');
+  console.log('cibles page ouvertes :', tg.filter(t=>t.type==='page').length);
+  process.exit(0);
+})();
+DCJS
+        echo "ctx_test.js created: $(wc -c < /workspace/ctx_test.js) bytes"
+        echo "=== All files ==="
+        ls -la /workspace/
+        echo "INIT COMPLETE"
+    volumeMounts:
+    - name: workspace
+      mountPath: /workspace
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:latest
+    args:
+      - --context=/workspace
+      - --dockerfile=/workspace/Dockerfile
+      - --destination=ghcr.io/nic01asFr/chrome-devtools-mcp:v0.1.0
+      - --tar-path=/tmp/image.tar
+      - --no-push
+      - --verbosity=info
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "4Gi"
+      limits:
+        cpu: "4"
+        memory: "8Gi"
+    volumeMounts:
+    - name: workspace
+      mountPath: /workspace
+  - name: alpine
+    image: alpine:3.19
+    command: ["sh", "-c", "while true; do sleep 60; done"]
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    volumeMounts:
+    - name: workspace
+      mountPath: /workspace
+  volumes:
+  - name: workspace
+    emptyDir: {}
