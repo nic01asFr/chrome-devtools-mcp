@@ -63,6 +63,7 @@ ENV PATH="/usr/local/bin:$PATH" \
     CDM_PROFILE_DIR=/data/profiles \
     CDM_DATA_DIR=/data \
     CDM_HEADLESS=false \
+    CDM_API_KEY="${CDM_API_KEY:-changeme}" \
     LANG=fr_FR.UTF-8
 
 # Copier les artefacts Node

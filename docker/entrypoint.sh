@@ -73,7 +73,7 @@ websockify \
     --web "$NOVNC_WEB" \
     --cert /dev/null \
     --key /dev/null \
-    --listen-port "$WEBSOCKIFY_PORT" \
+    "$WEBSOCKIFY_PORT" \
     localhost:5900 &
 
 # ------------------------------------------------------------------
