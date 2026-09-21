@@ -8,6 +8,9 @@ set -e
 # 1. Xvfb — Écran virtuel (1280×720, profondeur 24)
 # ------------------------------------------------------------------
 echo "[entrypoint] Démarrage Xvfb sur :99"
+# Nettoyage des verrous stale laissés par un arrêt brutal précédent
+pkill -f "Xvfb :99" 2>/dev/null || true
+rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true
 Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset &
 XVFB_PID=$!
 
