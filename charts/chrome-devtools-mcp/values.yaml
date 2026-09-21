@@ -4,7 +4,7 @@
 
 # --- Image Docker -----------------------------------------------------------
 image:
-  repository: ghcr.io/cerema/chrome-devtools-mcp
+  repository: ghcr.io/nic01asFr/chrome-devtools-mcp
   tag: latest
   pullPolicy: IfNotPresent
 
